@@ -108,6 +108,12 @@ if (( ${#changed_devices[@]} > 0 )); then
 
     # 3) Send it out
     send_telegram "$msg"
+
+    # 4) Update New FingerPrints in respective config files
+    ## Use `getNewFP.sh` script to extract and update FingerPrints
+    echo "----------------------------------------"
+    echo "Updating New FingerPrints in respective config files..."
+    bash getNewFP.sh
 else
     echo "=== No differences detected for any device. ==="
     # If you want to notify even when there are no updates, you can uncomment the line below:
