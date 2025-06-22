@@ -8,3 +8,9 @@ __pycache__
 # non-python output
 build/
 .venv/
+
+# Edward Personal files
+Telegram.config
+test_telegram.sh
+## logs
+logs/
