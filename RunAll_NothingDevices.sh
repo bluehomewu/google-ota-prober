@@ -70,13 +70,44 @@ for config_file in "$oem"/*.yml; do
     old_log="$LOG_DIR/${device_name}.log"
     if [[ -f "$old_log" ]]; then
         if ! diff -q "$old_log" "$tmp_out" > /dev/null; then
-            echo "########################################"
-            echo "# Differences found for device: $device_name #"
-            echo "########################################"
-            echo "----------------------------------------"
-            # Write diff file, but do not abort even if diff returns 1
-            diff "$old_log" "$tmp_out" > "$LOG_DIR/${device_name}.diff" || true
-            changed_devices+=("$device_name")
+
+            # Special case: previously no OTA URL, now there is one
+            if grep -q 'OTA URL obtained:' "$tmp_out" && ! grep -q 'OTA URL obtained:' "$old_log"; then
+                echo "########################################"
+                echo "# New OTA available for device: $device_name #"
+                echo "########################################"
+                echo "----------------------------------------"
+                diff "$old_log" "$tmp_out" > "$LOG_DIR/${device_name}.diff" || true
+                changed_devices+=("$device_name")
+
+            else
+                # Extract OS version (e.g. 3.2 or 1.1.7)
+                new_os=$(grep -m1 'Update title:' "$tmp_out" \
+                          | sed -E 's/.*OS *([0-9]+(\.[0-9]+)*).*/\1/')
+                old_os=$(grep -m1 'Update title:' "$old_log" \
+                          | sed -E 's/.*OS *([0-9]+(\.[0-9]+)*).*/\1/')
+                # Extract incremental build number inside parentheses
+                new_inc=$(grep -m1 'Update title:' "$tmp_out" \
+                           | sed -E 's/.*-([0-9]+)\).*/\1/')
+                old_inc=$(grep -m1 'Update title:' "$old_log" \
+                           | sed -E 's/.*-([0-9]+)\).*/\1/')
+
+                # Compare: OS upgrade OR (same OS AND incremental upgrade)
+                if dpkg --compare-versions "$new_os" gt "$old_os" || \
+                   ( dpkg --compare-versions "$new_os" eq "$old_os" && \
+                     (( 10#$new_inc > 10#$old_inc )) ); then
+                    echo "########################################"
+                    echo "# Valid update for device: $device_name #"
+                    echo "########################################"
+                    echo "----------------------------------------"
+                    diff "$old_log" "$tmp_out" > "$LOG_DIR/${device_name}.diff" || true
+                    changed_devices+=("$device_name")
+                else
+                    echo "# Detected downgrade/unchanged for $device_name:"
+                    echo "#    OS $old_os → $new_os, inc $old_inc → $new_inc; skipping."
+                fi
+            fi
+
         fi
     else
         echo "# No previous log for device: $device_name, saving current output"
@@ -113,7 +144,7 @@ if (( ${#changed_devices[@]} > 0 )); then
     ## Use `getNewFP.sh` script to extract and update FingerPrints
     echo "----------------------------------------"
     echo "Updating New FingerPrints in respective config files..."
-    bash getNewFP.sh
+    bash getNewFP.sh --logs "$LOG_DIR" --download "./downloads" --output "./metadata"
 else
     echo "=== No differences detected for any device. ==="
     # If you want to notify even when there are no updates, you can uncomment the line below:
