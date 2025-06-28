@@ -80,7 +80,8 @@ for config_file in "$oem"/*.yml; do
                 diff "$old_log" "$tmp_out" > "$LOG_DIR/${device_name}.diff" || true
                 changed_devices+=("$device_name")
 
-            else
+            # Only attempt version-compare if both logs contain "Update title:"
+            elif grep -q 'Update title:' "$tmp_out" && grep -q 'Update title:' "$old_log"; then
                 # Extract OS version (e.g. 3.2 or 1.1.7)
                 new_os=$(grep -m1 'Update title:' "$tmp_out" \
                           | sed -E 's/.*OS *([0-9]+(\.[0-9]+)*).*/\1/')
@@ -105,7 +106,12 @@ for config_file in "$oem"/*.yml; do
                 else
                     echo "# Detected downgrade/unchanged for $device_name:"
                     echo "#    OS $old_os → $new_os, inc $old_inc → $new_inc; skipping."
+                    echo "----------------------------------------"
                 fi
+
+            else
+                # Neither special-case nor version-case: skip
+                echo "# No update title found for $device_name; skipping."
             fi
 
         fi
